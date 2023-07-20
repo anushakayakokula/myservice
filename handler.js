@@ -1,35 +1,43 @@
 const AWS = require('aws-sdk');
 const sesV2 = new AWS.SESV2();
-const AWS = require('aws-sdk');
 
 exports.handler = async () => {
   AWS.config.update({ region: 'ap-south-1' }); 
   const sesV2 = new AWS.SESV2();
 
   try {
-    const response = await sesV2.listSuppressedDestinations({});
+    let allBounces = [];
+    let allComplaints = [];
+    let nextToken;
 
-    if (response.SuppressedDestinationSummaries) {
-      const bounces = response.SuppressedDestinationSummaries.filter(item => item.Reason === 'BOUNCE');
-      const complaints = response.SuppressedDestinationSummaries.filter(item => item.Reason === 'COMPLAINT');
+    do {
+      const response = await sesV2.listSuppressedDestinations({
+        NextToken: nextToken // Pass the NextToken for pagination
+      });
 
-      console.log('Bounces:', bounces);
-      console.log('Complaints:', complaints);
+      if (response.SuppressedDestinationSummaries) {
+        const bounces = response.SuppressedDestinationSummaries.filter(item => item.Reason === 'BOUNCE');
+        const complaints = response.SuppressedDestinationSummaries.filter(item => item.Reason === 'COMPLAINT');
 
-      // Return the results as the output of the Lambda function (optional)
-      return {
-        statusCode: 200,
-        body: JSON.stringify({ bounces, complaints }),
-      };
-    } else {
-      console.log('No suppressed destinations found.');
+        allBounces = allBounces.concat(bounces);
+        allComplaints = allComplaints.concat(complaints);
 
-      // Return a message when no suppressed destinations are found (optional)
-      return {
-        statusCode: 200,
-        body: JSON.stringify({ message: 'No suppressed destinations found.' }),
-      };
-    }
+        // If there is a NextToken, it means there are more results to fetch
+        nextToken = response.NextToken;
+      } else {
+        console.log('No suppressed destinations found.');
+        break;
+      }
+    } while (nextToken);
+
+    console.log('Bounces:', allBounces);
+    console.log('Complaints:', allComplaints);
+
+    // Return the results as the output of the Lambda function (optional)
+    return {
+      statusCode: 200,
+      body: JSON.stringify({ bounces: allBounces, complaints: allComplaints }),
+    };
   } catch (err) {
     console.error('Error fetching suppression list:', err);
 
@@ -41,32 +49,4 @@ exports.handler = async () => {
   }
 };
 
-
-// exports.hello = async (event, context) => {
-//   try {
-//     const response = await sesV2.listSuppressedDestinations({});
-
-//     if (response.SuppressedDestinationSummaries) {
-//       const bounces = response.SuppressedDestinationSummaries.filter(item => item.Reason === 'BOUNCE');
-//       const complaints = response.SuppressedDestinationSummaries.filter(item => item.Reason === 'COMPLAINT');
-
-//       console.log('Bounces:', bounces);
-//       console.log('Complaints:', complaints);
-//     } else {
-//       console.log('No suppressed destinations found.');
-//     }
-
-//     return {
-//       statusCode: 200,
-//       body: JSON.stringify({ message: 'Suppression list fetched successfully.' }),
-//     };
-//   } catch (err) {
-//     console.error('Error fetching suppression list:', err);
-
-//     return {
-//       statusCode: 500,
-//       body: JSON.stringify({ message: 'Error fetching suppression list.', error: err }),
-//     };
-//   }
-// };
 
